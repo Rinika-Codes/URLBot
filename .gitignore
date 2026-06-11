@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+*.env
+.env.*
+chroma_db/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+build/
+.npm
+logs/
+*.log
+
+# IDEs
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
