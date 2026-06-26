@@ -1,225 +1,101 @@
-import requests
-import re
-
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
-from database import pages_collection
-from database import chunks_collection
+from database import pages_collection, chunks_collection
 import uuid
-from chroma_client import chroma_collection, chroma_client
+import os
 
-visited_links = set()
+from langchain_community.document_loaders.recursive_url_loader import RecursiveUrlLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-
-def clean_text(text):
-
-    # remove extra whitespace
-    text = re.sub(r'\s+', ' ', text)
-
-    # remove weird newline symbols
-    text = text.replace("\\n", " ")
-
-    return text.strip()
-
-
-def chunk_text(text, chunk_size=500):
-
-    chunks = []
-
-    words = text.split()
-
-    for i in range(0, len(words), chunk_size):
-
-        chunk = " ".join(words[i:i + chunk_size])
-
-        chunks.append(chunk)
-
-    return chunks
-
+def bs4_extractor(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.extract()
+    return soup.get_text(separator=" ", strip=True)
 
 def crawl_website(url, max_pages=5):
+    # Setup chroma database path
+    db_dir = os.path.join(os.path.dirname(__file__), "chroma_db")
+    
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+    api_key = os.getenv("GEMINI_API_KEY")
 
-    global visited_links
-    visited_links = set()
+    # Initialize embedding function
+    # Note: ensure GEMINI_API_KEY is in your environment
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-2", 
+        google_api_key=api_key
+    )
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    all_content = []
+    # Clear previous MongoDB collections
     pages_collection.delete_many({})
     chunks_collection.delete_many({})
 
-    global chroma_collection
+    # Clear ChromaDB (easiest way is to delete and recreate collection if needed, 
+    # but Langchain's Chroma wrapper doesn't have an easy drop_collection exposed in the same way,
+    # so we can use persistent client to delete the collection directly)
+    import chromadb
+    chroma_client = chromadb.PersistentClient(path=db_dir)
     try:
         chroma_client.delete_collection("chunks_collection")
     except Exception:
         pass
-    chroma_collection = chroma_client.get_or_create_collection("chunks_collection")
 
-    crawl(
-        base_url=url,
-        current_url=url,
-        headers=headers,
-        all_content=all_content,
-        max_pages=max_pages
+    # Load documents lazily to respect max_pages
+    loader = RecursiveUrlLoader(url, max_depth=2, extractor=bs4_extractor)
+    
+    docs = []
+    print(f"Starting LangChain crawl on: {url}")
+    for doc in loader.lazy_load():
+        if len(docs) >= max_pages:
+            break
+        # Skip small or empty docs
+        if len(doc.page_content) > 100:
+            docs.append(doc)
+            print(f"Crawled: {doc.metadata.get('source')}")
+
+    # Split documents
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2500,
+        chunk_overlap=200
     )
-
-    return {
-        "pages_crawled": len(visited_links),
-        "content": all_content
-    }
-
-
-def crawl(base_url, current_url, headers, all_content, max_pages):
-
-    # stop if max pages reached
-    if len(visited_links) >= max_pages:
-        return
-
-    # avoid duplicate crawling
-    if current_url in visited_links:
-        return
-
-    try:
-
-        print("Crawling:", current_url)
-
-        response = requests.get(
-            current_url,
-            headers=headers,
-            timeout=5
-        )
-
-        # mark visited AFTER successful request
-        visited_links.add(current_url)
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        # remove useless tags
-        for tag in soup(["script", "style", "noscript"]):
-            tag.extract()
-
-        raw_text = soup.get_text(
-            separator=" ",
-            strip=True
-        )
-
-        cleaned_text = clean_text(raw_text)
-
-        # skip tiny/empty pages
-        if len(cleaned_text) < 100:
-            return
-
-        # save page content
+    splits = text_splitter.split_documents(docs)
+    
+    # Insert raw pages to MongoDB
+    all_content = []
+    for doc in docs:
+        page_url = doc.metadata.get("source", url)
         page_data = {
-        "website": base_url,
-        "page_url": current_url,
-        "content": cleaned_text[:3000]
+            "website": url,
+            "page_url": page_url,
+            "content": doc.page_content[:3000]
         }
-
-        # save clean copy in response
         all_content.append(page_data.copy())
-
-        # save to MongoDB
         pages_collection.insert_one(page_data)
 
-        # create chunks
-
-        chunks = chunk_text(cleaned_text)
-
-        chroma_ids = []
-        chroma_docs = []
-        chroma_metadatas = []
-
-        for index, chunk in enumerate(chunks):
-
-            chunk_data = {
-            "website": base_url,
-            "page_url": current_url,
+    # Insert chunks to MongoDB
+    for index, split in enumerate(splits):
+        page_url = split.metadata.get("source", url)
+        chunk_data = {
+            "website": url,
+            "page_url": page_url,
             "chunk_number": index,
-            "chunk_text": chunk
-            }
+            "chunk_text": split.page_content
+        }
+        chunks_collection.insert_one(chunk_data)
 
-            chunks_collection.insert_one(chunk_data)
+    # Ingest into ChromaDB using LangChain
+    if splits:
+        Chroma.from_documents(
+            documents=splits,
+            embedding=embeddings,
+            persist_directory=db_dir,
+            collection_name="chunks_collection"
+        )
 
-            chroma_ids.append(str(uuid.uuid4()))
-            chroma_docs.append(chunk)
-            chroma_metadatas.append({
-                "website": base_url,
-                "page_url": current_url,
-                "chunk_number": index
-            })
-
-        if chunks:
-            chroma_collection.add(
-                ids=chroma_ids,
-                documents=chroma_docs,
-                metadatas=chroma_metadatas
-            )
-
-
-        # extract links
-        links = soup.find_all("a")
-
-        for link in links:
-
-            href = link.get("href")
-
-            if not href:
-                continue
-
-            full_url = urljoin(base_url, href)
-
-            # remove fragments
-            full_url = full_url.split("#")[0]
-
-            # normalize trailing slash
-            if full_url.endswith("/"):
-                full_url = full_url[:-1]
-
-            # skip empty urls
-            if not full_url:
-                continue
-
-            # skip mail/javascript links
-            if full_url.startswith("mailto:"):
-                continue
-
-            if full_url.startswith("javascript:"):
-                continue
-
-            # skip files
-            blocked_extensions = (
-                ".pdf",
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".gif",
-                ".zip"
-            )
-
-            if full_url.lower().endswith(blocked_extensions):
-                continue
-
-            # keep only internal links
-            if is_internal_link(base_url, full_url):
-
-                crawl(
-                    base_url,
-                    full_url,
-                    headers,
-                    all_content,
-                    max_pages
-                )
-
-    except Exception as e:
-        print("ERROR:", e)
-
-
-def is_internal_link(base_url, target_url):
-
-    base_domain = urlparse(base_url).netloc
-    target_domain = urlparse(target_url).netloc
-
-    return base_domain == target_domain
+    return {
+        "pages_crawled": len(docs),
+        "content": all_content
+    }

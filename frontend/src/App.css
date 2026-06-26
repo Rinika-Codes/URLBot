@@ -111,12 +111,33 @@
 }
 
 .scrape-status {
-  margin-top: 1rem;
-  padding: 1rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
   font-size: 0.875rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.scrape-status:has-text,
+.scrape-status {
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-secondary);
+  border: 1px solid var(--panel-border);
+}
+
+/* Success state — message starts with ✅ */
+.scrape-status.success {
+  background: rgba(52, 211, 153, 0.08);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+/* Error state — message starts with ❌ */
+.scrape-status.error {
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .chat-container {
@@ -181,11 +202,48 @@
 }
 
 .message-content {
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   border-radius: 16px;
   line-height: 1.6;
   font-size: 0.9375rem;
-  white-space: pre-wrap;
+}
+
+/* Markdown rendered content inside bot messages */
+.message-wrapper.bot .message-content p {
+  margin: 0 0 0.5rem 0;
+}
+.message-wrapper.bot .message-content p:last-child {
+  margin-bottom: 0;
+}
+.message-wrapper.bot .message-content ul,
+.message-wrapper.bot .message-content ol {
+  margin: 0.25rem 0 0.5rem 1.25rem;
+  padding: 0;
+}
+.message-wrapper.bot .message-content li {
+  margin-bottom: 0.2rem;
+}
+.message-wrapper.bot .message-content strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+.message-wrapper.bot .message-content code {
+  background: rgba(255,255,255,0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.85em;
+}
+.message-wrapper.bot .message-content pre {
+  background: rgba(0,0,0,0.3);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.message-wrapper.bot .message-content pre code {
+  background: transparent;
+  padding: 0;
 }
 
 .message-wrapper.user .message-content {

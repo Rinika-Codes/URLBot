@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Bot, Send, Search, Settings2, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { Bot, Send, Search, Link as LinkIcon, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import './App.css';
 
 function App() {
@@ -32,12 +33,17 @@ function App() {
     setScrapeResult('');
     
     try {
-      const response = await axios.post('http://localhost:8000/scrape', { url, max_pages: 5 });
-      setScrapeResult(`Successfully scraped ${response.data.pages_crawled} pages.`);
-      setMessages(prev => [...prev, { role: 'bot', content: `I have finished studying ${url}. What would you like to know?` }]);
+      const response = await axios.post(
+        'http://localhost:8000/scrape',
+        { url, max_pages: 5 },
+        { timeout: 120000 }  // 2 minutes — large sites can take a while
+      );
+      setScrapeResult(`✅ Successfully scraped ${response.data.pages_crawled} page(s). You can now ask questions!`);
+      setMessages(prev => [...prev, { role: 'bot', content: `I have finished studying **${url}**. What would you like to know?` }]);
     } catch (err) {
-      setScrapeResult('Failed to scrape the website.');
-      console.error(err);
+      const detail = err.response?.data?.detail || err.message || 'Unknown error';
+      setScrapeResult(`❌ Failed to scrape: ${detail}`);
+      console.error('Scrape error:', err);
     } finally {
       setIsScraping(false);
     }
@@ -54,7 +60,8 @@ function App() {
 
     try {
       const response = await axios.post('http://localhost:8000/chat', {
-        message: userMsg
+        message: userMsg,
+        chat_history: messages
       });
       setMessages(prev => [...prev, { role: 'bot', content: response.data.response }]);
     } catch (err) {
@@ -101,8 +108,14 @@ function App() {
             )}
           </button>
 
+          {isScraping && (
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '-0.25rem' }}>
+              ⏳ This may take a minute for large sites...
+            </p>
+          )}
+
           {scrapeResult && (
-            <div className="scrape-status">
+            <div className={`scrape-status ${scrapeResult.startsWith('✅') ? 'success' : scrapeResult.startsWith('❌') ? 'error' : ''}`}>
               {scrapeResult}
             </div>
           )}
@@ -124,7 +137,11 @@ function App() {
                 {msg.role === 'bot' ? <Bot size={20} color="white" /> : 'U'}
               </div>
               <div className="message-content">
-                {msg.content}
+                {msg.role === 'bot' ? (
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from routes import chat
@@ -39,13 +39,16 @@ class ScrapeRequest(BaseModel):
 
 @app.post("/scrape")
 def scrape(request: ScrapeRequest):
-
-    data = crawl_website(
-        request.url,
-        max_pages=request.max_pages
-    )
-
-    return data
+    try:
+        data = crawl_website(
+            request.url,
+            max_pages=request.max_pages
+        )
+        return data
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/pages")
 def get_pages():
