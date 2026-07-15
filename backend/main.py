@@ -47,6 +47,11 @@ def scrape(request: ScrapeRequest):
         return data
     except Exception as e:
         import traceback
+        import datetime
+        log_path = os.path.join(os.path.dirname(__file__), "error.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n--- Scrape Exception at {datetime.datetime.now()} ---\n")
+            traceback.print_exc(file=f)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

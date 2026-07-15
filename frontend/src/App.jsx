@@ -34,7 +34,7 @@ function App() {
     
     try {
       const response = await axios.post(
-        'http://localhost:8000/scrape',
+        'http://127.0.0.1:8000/scrape',
         { url, max_pages: 5 },
         { timeout: 120000 }  // 2 minutes — large sites can take a while
       );
@@ -59,7 +59,7 @@ function App() {
     setIsTyping(true);
 
     try {
-      const response = await axios.post('http://localhost:8000/chat', {
+      const response = await axios.post('http://127.0.0.1:8000/chat', {
         message: userMsg,
         chat_history: messages
       });
