@@ -4,6 +4,8 @@ import { Bot, Send, Search, Link as LinkIcon, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 function App() {
   const [url, setUrl] = useState('');
   const [messages, setMessages] = useState([
@@ -34,7 +36,7 @@ function App() {
     
     try {
       const response = await axios.post(
-        'http://127.0.0.1:8000/scrape',
+        `${API_URL}/scrape`,
         { url, max_pages: 5 },
         { timeout: 120000 }  // 2 minutes — large sites can take a while
       );
@@ -59,7 +61,7 @@ function App() {
     setIsTyping(true);
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/chat', {
+      const response = await axios.post(`${API_URL}/chat`, {
         message: userMsg,
         chat_history: messages
       });
