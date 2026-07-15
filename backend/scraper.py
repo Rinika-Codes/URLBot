@@ -23,7 +23,7 @@ def crawl_website(url, max_pages=5):
     api_key = os.getenv("GEMINI_API_KEY")
 
     # Initialize embedding function
-    # Note: ensure GEMINI_API_KEY is in your environment
+
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/gemini-embedding-2", 
         google_api_key=api_key
@@ -33,9 +33,7 @@ def crawl_website(url, max_pages=5):
     pages_collection.delete_many({})
     chunks_collection.delete_many({})
 
-    # Clear ChromaDB (easiest way is to delete and recreate collection if needed, 
-    # but Langchain's Chroma wrapper doesn't have an easy drop_collection exposed in the same way,
-    # so we can use persistent client to delete the collection directly)
+    # Clear ChromaDB
     import chromadb
     chroma_client = chromadb.PersistentClient(path=db_dir)
     try:
@@ -98,4 +96,4 @@ def crawl_website(url, max_pages=5):
     return {
         "pages_crawled": len(docs),
         "content": all_content
-    }
+    }

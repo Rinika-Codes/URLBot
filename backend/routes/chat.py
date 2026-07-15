@@ -33,7 +33,7 @@ def chat(request: ChatRequest):
     hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
     if not gemini_api_key:
-        return {"response": "⚠️ Error: Please add your GEMINI_API_KEY to the backend/.env file."}
+        return {"response": " Error: Please add your GEMINI_API_KEY to the backend/.env file."}
 
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/gemini-embedding-2",
@@ -97,7 +97,7 @@ def chat(request: ChatRequest):
         print("Attempting to fallback to Hugging Face free API...")
         
         if not hf_api_key or hf_api_key == "your_hugging_face_api_token_here":
-            return {"response": f"⚠️ Gemini API Error and no HuggingFace fallback available. Error details: {e}"}
+            return {"response": f" Gemini API Error and no HuggingFace fallback available. Error details: {e}"}
             
         try:
             # Fallback LLM
@@ -123,4 +123,4 @@ def chat(request: ChatRequest):
             
         except Exception as hf_e:
             print("HuggingFace Fallback Failed:", hf_e)
-            return {"response": f"⚠️ Both Gemini and Fallback API failed. Error: {hf_e}"}
+            return {"response": f" Both Gemini and Fallback API failed. Error: {hf_e}"}
